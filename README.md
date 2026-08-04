@@ -74,7 +74,3 @@ Project ini siap diimpor ke Vercel sebagai project Next.js. Tambahkan dua enviro
 - `supabase/seed-demo.sql`: seed aman berisi contoh generik.
 - `docs/content-mapping.md`: pemetaan seluruh bagian sumber ke record dan halaman portal.
 - `references/`: salinan sumber teks, PDF halaman 3-29, dan referensi desain; jangan dipublikasikan.
-
-## Catatan Sumber
-
-Isi tabel Riwayat Revisi dan Lembar Persetujuan tidak tersedia dalam teks hasil ekstraksi yang dilampirkan. Portal mencatat kekurangan ini dan tidak mengarang isinya. Karakter ekstraksi yang jelas rusak dinormalisasi tanpa mengubah makna.
