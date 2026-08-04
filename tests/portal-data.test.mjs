@@ -7,6 +7,7 @@ import { evaluateObsolete } from "../lib/obsolete.ts";
 const root = process.cwd();
 const seed = fs.readFileSync(path.join(root, "supabase", "seed.sql"), "utf8");
 const migration = fs.readFileSync(path.join(root, "supabase", "migrations", "202608030001_initial_schema.sql"), "utf8");
+const adminForms = fs.readFileSync(path.join(root, "components", "admin-forms.tsx"), "utf8");
 
 test("seed internal memuat seluruh record utama", () => {
   assert.equal((seed.match(/insert into public\.standards /g) || []).length, 36);
@@ -21,6 +22,15 @@ test("migration mengaktifkan RLS dan proteksi admin", () => {
   assert.match(migration, /create policy standards_public_read/);
   assert.match(migration, /create policy standards_admin_all/);
   assert.match(migration, /create or replace function public\.write_audit_log/);
+  assert.match(migration, /grant select on table public\.documents,[\s\S]*public\.obsolete_criteria to anon/);
+  assert.match(migration, /grant insert, update, delete on table public\.documents,[\s\S]*public\.obsolete_criteria to authenticated/);
+  assert.match(migration, /revoke all on public\.audit_logs from anon, authenticated/);
+});
+
+test("aksi publikasi standar tidak bergantung pada state asinkron", () => {
+  assert.match(adminForms, /const submit = \(intent: "draft" \| "publish"\) => form\.handleSubmit/);
+  assert.match(adminForms, /type="button" onClick=\{submit\("publish"\)\}/);
+  assert.doesNotMatch(adminForms, /setIntent\("publish"\)/);
 });
 
 const criteria = [

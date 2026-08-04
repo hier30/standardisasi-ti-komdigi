@@ -284,5 +284,12 @@ create policy competencies_admin_all on public.competencies for all using (publi
 create policy obsolete_admin_all on public.obsolete_criteria for all using (public.is_admin()) with check (public.is_admin());
 create policy audit_admin_read on public.audit_logs for select using (public.is_admin());
 
+revoke all on table public.profiles, public.documents, public.document_sections, public.categories, public.subcategories, public.standards, public.standard_details, public.competency_roles, public.competency_groups, public.competencies, public.obsolete_criteria, public.audit_logs from anon, authenticated;
+
+grant select on table public.documents, public.document_sections, public.categories, public.subcategories, public.standards, public.standard_details, public.competency_roles, public.competency_groups, public.competencies, public.obsolete_criteria to anon;
+
+grant select on table public.profiles, public.documents, public.document_sections, public.categories, public.subcategories, public.standards, public.standard_details, public.competency_roles, public.competency_groups, public.competencies, public.obsolete_criteria to authenticated;
+grant insert, update, delete on table public.documents, public.document_sections, public.categories, public.subcategories, public.standards, public.standard_details, public.competency_roles, public.competency_groups, public.competencies, public.obsolete_criteria to authenticated;
+
 revoke all on public.audit_logs from anon, authenticated;
 grant select on public.audit_logs to authenticated;

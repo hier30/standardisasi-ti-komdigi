@@ -35,7 +35,7 @@ Tanpa `.env.local`, aplikasi otomatis masuk **mode demo lokal**. Buka `/login`, 
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://PROJECT.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxx
 ```
 
 5. Buat user admin melalui Supabase Authentication.

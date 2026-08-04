@@ -2,7 +2,7 @@
 
 ## 1. Buat Project
 
-Buat project Supabase baru pada organisasi milik Anda. Simpan URL project dan anon key. Service role key tidak diperlukan oleh frontend.
+Buat project Supabase baru pada organisasi milik Anda. Simpan URL project dan publishable key. Secret key tidak diperlukan oleh frontend.
 
 ## 2. Jalankan Migration
 
@@ -60,10 +60,10 @@ Buat `.env.local`:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://PROJECT.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=ANON_KEY
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxx
 ```
 
-Kedua variabel ini memang digunakan di browser dan tetap dibatasi oleh RLS. Jangan menambahkan `SUPABASE_SERVICE_ROLE_KEY` ke frontend.
+Kedua variabel ini memang digunakan di browser dan tetap dibatasi oleh RLS. Jangan menambahkan secret key atau `SUPABASE_SERVICE_ROLE_KEY` ke frontend.
 
 ## 6. Model Akses
 

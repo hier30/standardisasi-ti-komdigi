@@ -105,9 +105,14 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     }
 
     const supabase = createClient();
-    void Promise.all([supabase!.auth.getUser(), fetchSupabaseState()]).then(([{ data }, next]) => {
+    void Promise.all([supabase!.auth.getUser(), fetchSupabaseState()]).then(async ([{ data }, next]) => {
       setState(next);
-      setIsAdmin(Boolean(data.user));
+      if (!data.user) {
+        setIsAdmin(false);
+        return;
+      }
+      const { data: profile } = await supabase!.from("profiles").select("role").eq("id", data.user.id).single();
+      setIsAdmin(profile?.role === "admin");
     }).finally(() => setReady(true));
   }, [mode, refreshSupabase]);
 

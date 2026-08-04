@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { Plus, Save, Trash2 } from "lucide-react";
@@ -23,28 +23,27 @@ export function StandardForm({ initial }: { initial?: Standard }) {
   const { state, saveStandard } = usePortal();
   const { toast } = useToast();
   const router = useRouter();
-  const [intent, setIntent] = useState<"draft" | "publish">("draft");
   const form = useForm<StandardValues>({ resolver: zodResolver(standardSchema), defaultValues: initial ? { ...initial } : { id: newId("std"), sourceNumber: String(state.standards.length + 1), name: "", slug: "", categoryId: "", subcategoryId: "", description: "", purpose: "Menjadi acuan teknis yang seragam, aman, efisien, dan konsisten di lingkungan KOMDIGI.", scope: "", technicalProvisions: "", implementationNotes: "", version: "2025.1", effectiveDate: new Date().toISOString().slice(0, 10), reviewDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 10), documentReference: state.document.standardizationNumber, details: [{ id: newId("detail"), label: "", minimumValue: "", recommendedValue: "", unit: "", notes: "", sortOrder: 1 }] } });
   const fields = useFieldArray({ control: form.control, name: "details" });
   const selectedCategory = useWatch({ control: form.control, name: "categoryId" });
   const name = useWatch({ control: form.control, name: "name" });
   useEffect(() => { if (!initial && name) form.setValue("slug", slugify(name), { shouldDirty: true }); }, [form, initial, name]);
   useEffect(() => { const handler = (event: BeforeUnloadEvent) => { if (form.formState.isDirty) event.preventDefault(); }; window.addEventListener("beforeunload", handler); return () => window.removeEventListener("beforeunload", handler); }, [form.formState.isDirty]);
-  const submit = form.handleSubmit(async (values) => {
+  const submit = (intent: "draft" | "publish") => form.handleSubmit(async (values) => {
     const now = new Date().toISOString();
     await saveStandard({ ...values, documentId: state.document.id, status: intent === "publish" ? "berlaku" : "draft", isPublished: intent === "publish", sortOrder: initial?.sortOrder || state.standards.length + 1, updatedAt: now, details: values.details.map((detail, index) => ({ ...detail, sortOrder: index + 1 })) }, intent === "publish" ? "publish" : initial ? "update" : "create");
     toast(intent === "publish" ? "Standar berhasil dipublikasikan." : "Draft standar berhasil disimpan.");
     form.reset(values);
     router.push("/admin/standar");
   });
-  return <form onSubmit={submit} className="grid gap-6"><section className="grid gap-4 rounded-xl border border-[#d8dadd] bg-white p-5 md:grid-cols-2">
+  return <form onSubmit={submit("draft")} className="grid gap-6"><section className="grid gap-4 rounded-xl border border-[#d8dadd] bg-white p-5 md:grid-cols-2">
     <Field label="Versi" error={form.formState.errors.version?.message}><Input {...form.register("version")} /></Field>
     <Field label="Nama Standar" error={form.formState.errors.name?.message} className="md:col-span-2"><Input {...form.register("name")} /></Field><Field label="Slug" error={form.formState.errors.slug?.message} className="md:col-span-2"><Input {...form.register("slug")} /></Field>
     <Field label="Kategori" error={form.formState.errors.categoryId?.message}><Select {...form.register("categoryId")}><option value="">Pilih kategori</option>{state.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Select></Field><Field label="Subkategori"><Select {...form.register("subcategoryId")}><option value="">Tanpa subkategori</option>{state.subcategories.filter((sub) => !selectedCategory || sub.categoryId === selectedCategory).map((sub) => <option key={sub.id} value={sub.id}>{sub.name}</option>)}</Select></Field>
     <Field label="Tanggal Berlaku"><Input type="date" {...form.register("effectiveDate")} /></Field><Field label="Tanggal Tinjau"><Input type="date" {...form.register("reviewDate")} /></Field>
     <Field label="Deskripsi" error={form.formState.errors.description?.message} className="md:col-span-2"><Textarea {...form.register("description")} /></Field><Field label="Tujuan"><Textarea {...form.register("purpose")} /></Field><Field label="Ruang Lingkup"><Textarea {...form.register("scope")} /></Field><Field label="Ketentuan Teknis"><Textarea {...form.register("technicalProvisions")} /></Field><Field label="Catatan Implementasi"><Textarea {...form.register("implementationNotes")} /></Field><Field label="Referensi Dokumen" className="md:col-span-2"><Input {...form.register("documentReference")} /></Field>
   </section><section className="rounded-xl border border-[#d8dadd] bg-white p-5"><div className="flex items-center justify-between gap-3"><div><h2 className="font-heading text-xl font-semibold text-[#00295a]">Detail Teknis</h2><p className="mt-1 text-sm text-[#434750]">Tambahkan seluruh atribut dan nilai dari tabel sumber.</p></div><Button type="button" variant="outline" onClick={() => fields.append({ id: newId("detail"), label: "", minimumValue: "", recommendedValue: "", unit: "", notes: "", sortOrder: fields.fields.length + 1 })}><Plus className="size-4" />Tambah detail</Button></div><div className="mt-5 grid gap-4">{fields.fields.map((field, index) => <div key={field.id} className="grid gap-3 rounded-lg border border-[#d8dadd] bg-[#f7f9fc] p-4 md:grid-cols-2"><Field label={`Label ${index + 1}`} error={form.formState.errors.details?.[index]?.label?.message}><Input {...form.register(`details.${index}.label`)} /></Field><Field label="Satuan"><Input {...form.register(`details.${index}.unit`)} /></Field><Field label="Nilai/Ketentuan" error={form.formState.errors.details?.[index]?.minimumValue?.message}><Textarea {...form.register(`details.${index}.minimumValue`)} /></Field><Field label="Rekomendasi (jika ada)"><Textarea {...form.register(`details.${index}.recommendedValue`)} /></Field><Field label="Catatan" className="md:col-span-2"><Input {...form.register(`details.${index}.notes`)} /></Field><div className="md:col-span-2 flex justify-end"><Button type="button" variant="danger" size="sm" disabled={fields.fields.length === 1} onClick={() => fields.remove(index)}><Trash2 className="size-4" />Hapus detail</Button></div></div>)}</div></section>
-    <div className="sticky bottom-3 flex flex-wrap justify-end gap-3 rounded-xl border border-[#d8dadd] bg-white/95 p-4 shadow-lg backdrop-blur"><Button type="button" variant="outline" onClick={() => router.back()}>Batal</Button><Button type="submit" variant="outline" onClick={() => setIntent("draft")} disabled={form.formState.isSubmitting}><Save className="size-4" />Simpan Draft</Button><Button type="submit" onClick={() => setIntent("publish")} disabled={form.formState.isSubmitting}><Save className="size-4" />Publikasikan</Button></div>
+    <div className="sticky bottom-3 flex flex-wrap justify-end gap-3 rounded-xl border border-[#d8dadd] bg-white/95 p-4 shadow-lg backdrop-blur"><Button type="button" variant="outline" onClick={() => router.back()}>Batal</Button><Button type="submit" variant="outline" disabled={form.formState.isSubmitting}><Save className="size-4" />Simpan Draft</Button><Button type="button" onClick={submit("publish")} disabled={form.formState.isSubmitting}><Save className="size-4" />Publikasikan</Button></div>
   </form>;
 }
 
