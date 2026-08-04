@@ -81,10 +81,6 @@ export function AppSidebar({ open, onClose }: { open: boolean; onClose: () => vo
   </>;
 }
 
-export function MobileNavigation({ onOpen }: { onOpen: () => void }) {
-  return <button className="fixed bottom-4 right-4 z-40 grid size-12 place-items-center rounded-full bg-[#07528f] text-white shadow-lg lg:hidden" onClick={onOpen} aria-label="Buka menu"><Menu className="size-5" /></button>;
-}
-
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   return <div className="min-h-screen bg-[#f7f8fa] text-[#18212b]">
@@ -92,6 +88,5 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <AppHeader onMenu={() => setMenuOpen(true)} />
     <main className="min-h-[calc(100vh-72px)] lg:ml-[266px]"><div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-7">{children}</div></main>
     <footer className="border-t border-[#e0e4e8] bg-white py-5 text-xs text-[#66717d] lg:ml-[266px]"><div className="mx-auto flex max-w-[1440px] flex-col justify-between gap-2 px-4 sm:px-6 md:flex-row lg:px-8"><span><strong className="text-[#002b52]">Standardisasi TI Komdigi</strong> - Sistem Informasi Standardisasi</span><span>ST-002/SJ.7/KITG/07/2024-01</span></div></footer>
-    <MobileNavigation onOpen={() => setMenuOpen(true)} />
   </div>;
 }
