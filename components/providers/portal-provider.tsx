@@ -39,6 +39,17 @@ const dbText = (row: DbRow, key: string) => String(row[key] ?? "");
 const dbNumber = (row: DbRow, key: string) => Number(row[key] ?? 0);
 const dbBoolean = (row: DbRow, key: string) => Boolean(row[key]);
 const dbRows = (value: unknown) => Array.isArray(value) ? value as DbRow[] : [];
+const toError = (error: { message?: string; details?: string; hint?: string; code?: string }, fallback: string) => new Error([error.message || fallback, error.details, error.hint, error.code ? `Kode: ${error.code}` : undefined].filter(Boolean).join(" "));
+type BrowserSupabaseClient = NonNullable<ReturnType<typeof createClient>>;
+
+async function requireAdminSession(supabase: BrowserSupabaseClient) {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) throw new Error("Sesi admin tidak aktif. Silakan login ulang lalu coba simpan lagi.");
+
+  const { data: profile, error: profileError } = await supabase.from("profiles").select("role").eq("id", userData.user.id).single();
+  if (profileError) throw toError(profileError, "Gagal memverifikasi hak akses admin.");
+  if (profile?.role !== "admin") throw new Error("Akun ini tidak memiliki hak akses admin.");
+}
 
 async function fetchSupabaseState(): Promise<PortalState> {
   const supabase = createClient();
@@ -53,7 +64,7 @@ async function fetchSupabaseState(): Promise<PortalState> {
     supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(250),
   ]);
   const failure = [documentResult, categoryResult, subcategoryResult, standardResult, roleResult, criterionResult].find((result) => result.error);
-  if (failure?.error) throw failure.error;
+  if (failure?.error) throw toError(failure.error, "Gagal memuat data Supabase.");
 
   const documentRow = documentResult.data as unknown as DbRow;
   const document: PortalDocument = {
@@ -137,8 +148,9 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       return {};
     }
     const supabase = createClient();
-    const { error } = await supabase!.auth.signInWithPassword({ email, password });
+    const { data: signInData, error } = await supabase!.auth.signInWithPassword({ email, password });
     if (error) return { error: "Email atau kata sandi tidak sesuai." };
+    if (!signInData.session) return { error: "Sesi login tidak berhasil dibuat. Coba masuk ulang." };
     const { data: userData } = await supabase!.auth.getUser();
     const { data: profile } = await supabase!.from("profiles").select("role").eq("id", userData.user?.id || "").single();
     if (profile?.role !== "admin") {
@@ -160,6 +172,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   const saveStandard = useCallback(async (standard: Standard, action = "update") => {
     if (mode === "supabase") {
       const supabase = createClient()!;
+      await requireAdminSession(supabase);
       const payload = {
         id: standard.id, document_id: standard.documentId, category_id: standard.categoryId,
         subcategory_id: standard.subcategoryId || null, source_number: standard.sourceNumber,
@@ -172,15 +185,16 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         is_published: standard.isPublished, updated_at: new Date().toISOString(),
       };
       const { error } = await supabase.from("standards").upsert(payload);
-      if (error) throw error;
-      await supabase.from("standard_details").delete().eq("standard_id", standard.id);
+      if (error) throw toError(error, "Gagal menyimpan standar.");
+      const { error: deleteDetailError } = await supabase.from("standard_details").delete().eq("standard_id", standard.id);
+      if (deleteDetailError) throw toError(deleteDetailError, "Gagal memperbarui detail teknis.");
       if (standard.details.length) {
         const { error: detailError } = await supabase.from("standard_details").insert(standard.details.map((detail) => ({
           id: detail.id, standard_id: standard.id, label: detail.label,
           minimum_value: detail.minimumValue, recommended_value: detail.recommendedValue || null,
           unit: detail.unit || null, notes: detail.notes || null, sort_order: detail.sortOrder,
         })));
-        if (detailError) throw detailError;
+        if (detailError) throw toError(detailError, "Gagal menyimpan detail teknis.");
       }
     }
     setState((current) => {
@@ -213,16 +227,20 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     const item = state.standards.find((standard) => standard.id === id);
     if (!item) return;
     if (mode === "supabase") {
-      const { error } = await createClient()!.from("standards").update({ deleted_at: new Date().toISOString(), is_published: false }).eq("id", id);
-      if (error) throw error;
+      const supabase = createClient()!;
+      await requireAdminSession(supabase);
+      const { error } = await supabase.from("standards").update({ deleted_at: new Date().toISOString(), is_published: false }).eq("id", id);
+      if (error) throw toError(error, "Gagal menghapus standar.");
     }
     setState((current) => appendAudit({ ...current, standards: current.standards.filter((standard) => standard.id !== id) }, "standard", id, item.name, "delete", item));
   }, [appendAudit, mode, state.standards]);
 
   const saveCategory = useCallback(async (category: Category) => {
     if (mode === "supabase") {
-      const { error } = await createClient()!.from("categories").upsert({ id: category.id, name: category.name, slug: category.slug, description: category.description, icon: category.icon, sort_order: category.sortOrder, is_active: category.isActive, updated_at: new Date().toISOString() });
-      if (error) throw error;
+      const supabase = createClient()!;
+      await requireAdminSession(supabase);
+      const { error } = await supabase.from("categories").upsert({ id: category.id, name: category.name, slug: category.slug, description: category.description, icon: category.icon, sort_order: category.sortOrder, is_active: category.isActive, updated_at: new Date().toISOString() });
+      if (error) throw toError(error, "Gagal menyimpan kategori.");
     }
     setState((current) => {
       const old = current.categories.find((item) => item.id === category.id);
@@ -236,7 +254,9 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     const category = state.categories.find((item) => item.id === id);
     if (!category) return {};
     if (mode === "supabase") {
-      const { error } = await createClient()!.from("categories").delete().eq("id", id);
+      const supabase = createClient()!;
+      await requireAdminSession(supabase);
+      const { error } = await supabase.from("categories").delete().eq("id", id);
       if (error) return { error: error.message };
     }
     setState((current) => appendAudit({ ...current, categories: current.categories.filter((item) => item.id !== id) }, "category", id, category.name, "delete", category));
@@ -245,8 +265,10 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
 
   const saveSubcategory = useCallback(async (subcategory: Subcategory) => {
     if (mode === "supabase") {
-      const { error } = await createClient()!.from("subcategories").upsert({ id: subcategory.id, category_id: subcategory.categoryId, name: subcategory.name, slug: subcategory.slug, description: subcategory.description, sort_order: subcategory.sortOrder, is_active: subcategory.isActive });
-      if (error) throw error;
+      const supabase = createClient()!;
+      await requireAdminSession(supabase);
+      const { error } = await supabase.from("subcategories").upsert({ id: subcategory.id, category_id: subcategory.categoryId, name: subcategory.name, slug: subcategory.slug, description: subcategory.description, sort_order: subcategory.sortOrder, is_active: subcategory.isActive });
+      if (error) throw toError(error, "Gagal menyimpan subkategori.");
     }
     setState((current) => {
       const old = current.subcategories.find((item) => item.id === subcategory.id);
@@ -260,7 +282,9 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     const subcategory = state.subcategories.find((item) => item.id === id);
     if (!subcategory) return {};
     if (mode === "supabase") {
-      const { error } = await createClient()!.from("subcategories").delete().eq("id", id);
+      const supabase = createClient()!;
+      await requireAdminSession(supabase);
+      const { error } = await supabase.from("subcategories").delete().eq("id", id);
       if (error) return { error: error.message };
     }
     setState((current) => appendAudit({ ...current, subcategories: current.subcategories.filter((item) => item.id !== id) }, "subcategory", id, subcategory.name, "delete", subcategory));
@@ -270,12 +294,14 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   const saveRole = useCallback(async (role: CompetencyRole) => {
     if (mode === "supabase") {
       const supabase = createClient()!;
+      await requireAdminSession(supabase);
       const { error } = await supabase.from("competency_roles").upsert({ id: role.id, document_id: role.documentId, source_number: role.sourceNumber, name: role.name, slug: role.slug, description: role.description, level: role.level, tags: role.tags, sort_order: role.sortOrder, is_active: role.isActive });
-      if (error) throw error;
-      await supabase.from("competencies").delete().eq("role_id", role.id);
+      if (error) throw toError(error, "Gagal menyimpan role kompetensi.");
+      const { error: deleteCompetencyError } = await supabase.from("competencies").delete().eq("role_id", role.id);
+      if (deleteCompetencyError) throw toError(deleteCompetencyError, "Gagal memperbarui kompetensi.");
       if (role.competencies.length) {
         const { error: competencyError } = await supabase.from("competencies").insert(role.competencies.map((item, index) => ({ id: item.id, role_id: role.id, group_id: item.group === "Kompetensi Dasar" ? "group-basic" : "group-technical", competency_number: item.number, description: item.description, tags: item.tags, sort_order: index + 1 })));
-        if (competencyError) throw competencyError;
+        if (competencyError) throw toError(competencyError, "Gagal menyimpan kompetensi.");
       }
     }
     setState((current) => {
@@ -287,14 +313,21 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   const deleteRole = useCallback(async (id: string) => {
     const role = state.roles.find((item) => item.id === id);
     if (!role) return;
-    if (mode === "supabase") await createClient()!.from("competency_roles").delete().eq("id", id);
+    if (mode === "supabase") {
+      const supabase = createClient()!;
+      await requireAdminSession(supabase);
+      const { error } = await supabase.from("competency_roles").delete().eq("id", id);
+      if (error) throw toError(error, "Gagal menghapus role kompetensi.");
+    }
     setState((current) => appendAudit({ ...current, roles: current.roles.filter((item) => item.id !== id) }, "competency_role", id, role.name, "delete", role));
   }, [appendAudit, mode, state.roles]);
 
   const saveCriterion = useCallback(async (criterion: ObsoleteCriterion) => {
     if (mode === "supabase") {
-      const { error } = await createClient()!.from("obsolete_criteria").upsert({ id: criterion.id, source_number: criterion.sourceNumber, name: criterion.name, device_type: criterion.deviceType, description: criterion.description, condition_type: criterion.conditionType, operator: criterion.operator, condition_value: criterion.conditionValue, condition_unit: criterion.conditionUnit || null, requires_warranty_expired: criterion.requiresWarrantyExpired, sort_order: criterion.sortOrder, is_active: criterion.isActive });
-      if (error) throw error;
+      const supabase = createClient()!;
+      await requireAdminSession(supabase);
+      const { error } = await supabase.from("obsolete_criteria").upsert({ id: criterion.id, source_number: criterion.sourceNumber, name: criterion.name, device_type: criterion.deviceType, description: criterion.description, condition_type: criterion.conditionType, operator: criterion.operator, condition_value: criterion.conditionValue, condition_unit: criterion.conditionUnit || null, requires_warranty_expired: criterion.requiresWarrantyExpired, sort_order: criterion.sortOrder, is_active: criterion.isActive });
+      if (error) throw toError(error, "Gagal menyimpan kriteria obsolete.");
     }
     setState((current) => {
       const old = current.obsoleteCriteria.find((item) => item.id === criterion.id);
@@ -305,20 +338,26 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   const deleteCriterion = useCallback(async (id: string) => {
     const criterion = state.obsoleteCriteria.find((item) => item.id === id);
     if (!criterion) return;
-    if (mode === "supabase") await createClient()!.from("obsolete_criteria").delete().eq("id", id);
+    if (mode === "supabase") {
+      const supabase = createClient()!;
+      await requireAdminSession(supabase);
+      const { error } = await supabase.from("obsolete_criteria").delete().eq("id", id);
+      if (error) throw toError(error, "Gagal menghapus kriteria obsolete.");
+    }
     setState((current) => appendAudit({ ...current, obsoleteCriteria: current.obsoleteCriteria.filter((item) => item.id !== id) }, "obsolete_criterion", id, criterion.name, "delete", criterion));
   }, [appendAudit, mode, state.obsoleteCriteria]);
 
   const saveDocument = useCallback(async (document: PortalDocument) => {
     if (mode === "supabase") {
       const supabase = createClient()!;
+      await requireAdminSession(supabase);
       const { error } = await supabase.from("documents").upsert({ id: document.id, document_name: document.documentName, document_number: document.documentNumber, standardization_number: document.standardizationNumber, issuing_unit: document.issuingUnit, established_date: document.establishedDate, effective_date: document.effectiveDate, status: document.status, purpose: document.purpose, scope: document.scope, attachment_information: document.attachmentInformation });
-      if (error) throw error;
+      if (error) throw toError(error, "Gagal menyimpan dokumen.");
       const { error: deleteSectionError } = await supabase.from("document_sections").delete().eq("document_id", document.id);
-      if (deleteSectionError) throw deleteSectionError;
+      if (deleteSectionError) throw toError(deleteSectionError, "Gagal memperbarui bagian dokumen.");
       if (document.sections.length) {
         const { error: sectionError } = await supabase.from("document_sections").insert(document.sections.map((section) => ({ id: section.id, document_id: document.id, section_number: section.sectionNumber, title: section.title, content: section.content, sort_order: section.sortOrder })));
-        if (sectionError) throw sectionError;
+        if (sectionError) throw toError(sectionError, "Gagal menyimpan bagian dokumen.");
       }
     }
     setState((current) => appendAudit({ ...current, document }, "document", document.id, document.documentName, "update", current.document, document));

@@ -18,23 +18,40 @@ const standardSchema = z.object({
   id: z.string(), sourceNumber: z.string().min(1, "Nomor sumber wajib diisi"), name: z.string().min(3, "Nama minimal 3 karakter"), slug: z.string().min(3, "Slug wajib diisi"), categoryId: z.string().min(1, "Kategori wajib dipilih"), subcategoryId: z.string().optional(), description: z.string().min(10, "Deskripsi minimal 10 karakter"), purpose: z.string().optional(), scope: z.string().optional(), technicalProvisions: z.string().optional(), implementationNotes: z.string().optional(), version: z.string().min(1), effectiveDate: z.string().min(1), reviewDate: z.string().min(1), documentReference: z.string().min(1), details: z.array(detailSchema).min(1, "Minimal satu detail teknis"),
 });
 type StandardValues = z.infer<typeof standardSchema>;
+const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "Terjadi kesalahan saat menyimpan standar.";
+const uniqueCustomSourceNumber = (standards: Standard[]) => {
+  const used = new Set(standards.map((standard) => standard.sourceNumber));
+  let sourceNumber = `custom-${Date.now().toString(36)}`;
+  let index = 1;
+  while (used.has(sourceNumber)) {
+    sourceNumber = `custom-${Date.now().toString(36)}-${index}`;
+    index += 1;
+  }
+  return sourceNumber;
+};
 
 export function StandardForm({ initial }: { initial?: Standard }) {
   const { state, saveStandard } = usePortal();
   const { toast } = useToast();
   const router = useRouter();
-  const form = useForm<StandardValues>({ resolver: zodResolver(standardSchema), defaultValues: initial ? { ...initial } : { id: newId("std"), sourceNumber: String(state.standards.length + 1), name: "", slug: "", categoryId: "", subcategoryId: "", description: "", purpose: "Menjadi acuan teknis yang seragam, aman, efisien, dan konsisten di lingkungan KOMDIGI.", scope: "", technicalProvisions: "", implementationNotes: "", version: "2025.1", effectiveDate: new Date().toISOString().slice(0, 10), reviewDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 10), documentReference: state.document.standardizationNumber, details: [{ id: newId("detail"), label: "", minimumValue: "", recommendedValue: "", unit: "", notes: "", sortOrder: 1 }] } });
+  const form = useForm<StandardValues>({ resolver: zodResolver(standardSchema), defaultValues: initial ? { ...initial } : { id: newId("std"), sourceNumber: uniqueCustomSourceNumber(state.standards), name: "", slug: "", categoryId: "", subcategoryId: "", description: "", purpose: "Menjadi acuan teknis yang seragam, aman, efisien, dan konsisten di lingkungan KOMDIGI.", scope: "", technicalProvisions: "", implementationNotes: "", version: "2025.1", effectiveDate: new Date().toISOString().slice(0, 10), reviewDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 10), documentReference: state.document.standardizationNumber, details: [{ id: newId("detail"), label: "", minimumValue: "", recommendedValue: "", unit: "", notes: "", sortOrder: 1 }] } });
   const fields = useFieldArray({ control: form.control, name: "details" });
   const selectedCategory = useWatch({ control: form.control, name: "categoryId" });
   const name = useWatch({ control: form.control, name: "name" });
   useEffect(() => { if (!initial && name) form.setValue("slug", slugify(name), { shouldDirty: true }); }, [form, initial, name]);
   useEffect(() => { const handler = (event: BeforeUnloadEvent) => { if (form.formState.isDirty) event.preventDefault(); }; window.addEventListener("beforeunload", handler); return () => window.removeEventListener("beforeunload", handler); }, [form.formState.isDirty]);
   const submit = (intent: "draft" | "publish") => form.handleSubmit(async (values) => {
-    const now = new Date().toISOString();
-    await saveStandard({ ...values, documentId: state.document.id, status: intent === "publish" ? "berlaku" : "draft", isPublished: intent === "publish", sortOrder: initial?.sortOrder || state.standards.length + 1, updatedAt: now, details: values.details.map((detail, index) => ({ ...detail, sortOrder: index + 1 })) }, intent === "publish" ? "publish" : initial ? "update" : "create");
-    toast(intent === "publish" ? "Standar berhasil dipublikasikan." : "Draft standar berhasil disimpan.");
-    form.reset(values);
-    router.push("/admin/standar");
+    try {
+      const now = new Date().toISOString();
+      const sourceNumber = initial ? values.sourceNumber : uniqueCustomSourceNumber(state.standards);
+      await saveStandard({ ...values, sourceNumber, documentId: state.document.id, status: intent === "publish" ? "berlaku" : "draft", isPublished: intent === "publish", sortOrder: initial?.sortOrder || state.standards.length + 1, updatedAt: now, details: values.details.map((detail, index) => ({ ...detail, sortOrder: index + 1 })) }, intent === "publish" ? "publish" : initial ? "update" : "create");
+      toast(intent === "publish" ? "Standar berhasil dipublikasikan." : "Draft standar berhasil disimpan.");
+      form.reset(values);
+      router.push("/admin/standar");
+    } catch (error) {
+      console.error(error);
+      toast(getErrorMessage(error), "error");
+    }
   });
   return <form onSubmit={submit("draft")} className="grid gap-6"><section className="grid gap-4 rounded-xl border border-[#d8dadd] bg-white p-5 md:grid-cols-2">
     <Field label="Versi" error={form.formState.errors.version?.message}><Input {...form.register("version")} /></Field>
