@@ -7,7 +7,7 @@ Aplikasi Next.js untuk mendigitalisasi dokumen **Standardisasi Teknologi Informa
 - Katalog 36 standar teknis dengan 139 detail/baris sumber.
 - Sidebar publik berisi Beranda serta sembilan menu: Pusat Data, Aplikasi, End Device, Komunikasi, Pengamanan, Data, SDM, Obsolete, dan Referensi.
 - Enam halaman standar teknis berbentuk tabel informasi dengan pencarian dan filter kelompok.
-- Detail standar, duplikasi, publikasi, arsip, pemulihan, dan soft delete.
+- Detail standar, publikasi, arsip, pemulihan, dan soft delete.
 - Tujuh kategori, 18 subkategori, 14 role, dan 119 butir kompetensi.
 - Evaluator obsolete dinamis berdasarkan empat kriteria aktif.
 - Informasi dokumen, referensi, dan ketentuan standardisasi.

@@ -17,7 +17,6 @@ interface PortalContextValue {
   login: (email: string, password: string, remember: boolean) => Promise<{ error?: string }>;
   logout: () => Promise<void>;
   saveStandard: (standard: Standard, action?: string) => Promise<void>;
-  duplicateStandard: (standard: Standard) => Promise<void>;
   archiveStandard: (id: string) => Promise<void>;
   deleteStandard: (id: string) => Promise<void>;
   saveCategory: (category: Category) => Promise<void>;
@@ -204,20 +203,6 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     });
   }, [appendAudit, mode]);
 
-  const duplicateStandard = useCallback(async (source: Standard) => {
-    const copy: Standard = {
-      ...source,
-      id: newId("std"),
-      name: `${source.name} (Salinan)`,
-      slug: `${source.slug}-salinan-${Date.now()}`,
-      status: "draft",
-      isPublished: false,
-      updatedAt: new Date().toISOString(),
-      details: source.details.map((detail) => ({ ...detail, id: newId("detail") })),
-    };
-    await saveStandard(copy, "duplicate");
-  }, [saveStandard]);
-
   const archiveStandard = useCallback(async (id: string) => {
     const item = state.standards.find((standard) => standard.id === id);
     if (item) await saveStandard({ ...item, status: item.status === "arsip" ? "draft" : "arsip", isPublished: false, updatedAt: new Date().toISOString() }, item.status === "arsip" ? "restore" : "archive");
@@ -368,7 +353,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     setState(initialPortalState);
   }, []);
 
-  const value = useMemo<PortalContextValue>(() => ({ state, mode, isAdmin, ready, login, logout, saveStandard, duplicateStandard, archiveStandard, deleteStandard, saveCategory, deleteCategory, saveSubcategory, deleteSubcategory, saveRole, deleteRole, saveCriterion, deleteCriterion, saveDocument, resetDemo }), [state, mode, isAdmin, ready, login, logout, saveStandard, duplicateStandard, archiveStandard, deleteStandard, saveCategory, deleteCategory, saveSubcategory, deleteSubcategory, saveRole, deleteRole, saveCriterion, deleteCriterion, saveDocument, resetDemo]);
+  const value = useMemo<PortalContextValue>(() => ({ state, mode, isAdmin, ready, login, logout, saveStandard, archiveStandard, deleteStandard, saveCategory, deleteCategory, saveSubcategory, deleteSubcategory, saveRole, deleteRole, saveCriterion, deleteCriterion, saveDocument, resetDemo }), [state, mode, isAdmin, ready, login, logout, saveStandard, archiveStandard, deleteStandard, saveCategory, deleteCategory, saveSubcategory, deleteSubcategory, saveRole, deleteRole, saveCriterion, deleteCriterion, saveDocument, resetDemo]);
 
   return <PortalContext.Provider value={value}>{children}</PortalContext.Provider>;
 }
